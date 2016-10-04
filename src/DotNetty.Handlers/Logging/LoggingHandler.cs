@@ -4,6 +4,7 @@
 namespace DotNetty.Handlers.Logging
 {
     using System;
+    using System.IO;
     using System.Net;
     using System.Text;
     using System.Threading.Tasks;
@@ -17,6 +18,7 @@ namespace DotNetty.Handlers.Logging
     /// </summary>
     public class LoggingHandler : ChannelHandlerAdapter
     {
+        readonly string name;
         const LogLevel DefaultLevel = LogLevel.DEBUG;
 
         protected readonly InternalLogLevel InternalLevel;
@@ -84,6 +86,7 @@ namespace DotNetty.Handlers.Logging
         /// <param name="level">the log level</param>
         public LoggingHandler(string name, LogLevel level)
         {
+            this.name = name;
             if (name == null)
             {
                 throw new NullReferenceException("name");
@@ -101,6 +104,8 @@ namespace DotNetty.Handlers.Logging
 
         public override void ChannelRegistered(IChannelHandlerContext ctx)
         {
+            File.AppendAllText(this.name, this.Format(ctx, "REGISTERED"));
+            File.AppendAllText(this.name, Environment.NewLine);
             if (this.Logger.IsEnabled(this.InternalLevel))
             {
                 this.Logger.Log(this.InternalLevel, this.Format(ctx, "REGISTERED"));
@@ -110,6 +115,8 @@ namespace DotNetty.Handlers.Logging
 
         public override void ChannelUnregistered(IChannelHandlerContext ctx)
         {
+            File.AppendAllText(this.name, this.Format(ctx, "UNREGISTERED"));
+            File.AppendAllText(this.name, Environment.NewLine);
             if (this.Logger.IsEnabled(this.InternalLevel))
             {
                 this.Logger.Log(this.InternalLevel, this.Format(ctx, "UNREGISTERED"));
@@ -119,6 +126,8 @@ namespace DotNetty.Handlers.Logging
 
         public override void ChannelActive(IChannelHandlerContext ctx)
         {
+            File.AppendAllText(this.name, this.Format(ctx, "ACTIVE"));
+            File.AppendAllText(this.name, Environment.NewLine);
             if (this.Logger.IsEnabled(this.InternalLevel))
             {
                 this.Logger.Log(this.InternalLevel, this.Format(ctx, "ACTIVE"));
@@ -128,6 +137,8 @@ namespace DotNetty.Handlers.Logging
 
         public override void ChannelInactive(IChannelHandlerContext ctx)
         {
+            File.AppendAllText(this.name, this.Format(ctx, "INACTIVE"));
+            File.AppendAllText(this.name, Environment.NewLine);
             if (this.Logger.IsEnabled(this.InternalLevel))
             {
                 this.Logger.Log(this.InternalLevel, this.Format(ctx, "INACTIVE"));
@@ -137,6 +148,8 @@ namespace DotNetty.Handlers.Logging
 
         public override void ExceptionCaught(IChannelHandlerContext ctx, Exception cause)
         {
+            File.AppendAllText(this.name, this.Format(ctx, "EXCEPTION", cause));
+            File.AppendAllText(this.name, Environment.NewLine);
             if (this.Logger.IsEnabled(this.InternalLevel))
             {
                 this.Logger.Log(this.InternalLevel, this.Format(ctx, "EXCEPTION", cause), cause);
@@ -146,6 +159,8 @@ namespace DotNetty.Handlers.Logging
 
         public override void UserEventTriggered(IChannelHandlerContext ctx, object evt)
         {
+            File.AppendAllText(this.name, this.Format(ctx, "USER_EVENT", evt));
+            File.AppendAllText(this.name, Environment.NewLine);
             if (this.Logger.IsEnabled(this.InternalLevel))
             {
                 this.Logger.Log(this.InternalLevel, this.Format(ctx, "USER_EVENT", evt));
@@ -155,6 +170,8 @@ namespace DotNetty.Handlers.Logging
 
         public override Task BindAsync(IChannelHandlerContext ctx, EndPoint localAddress)
         {
+            File.AppendAllText(this.name, this.Format(ctx, "BIND", localAddress));
+            File.AppendAllText(this.name, Environment.NewLine);
             if (this.Logger.IsEnabled(this.InternalLevel))
             {
                 this.Logger.Log(this.InternalLevel, this.Format(ctx, "BIND", localAddress));
@@ -164,6 +181,8 @@ namespace DotNetty.Handlers.Logging
 
         public override Task ConnectAsync(IChannelHandlerContext ctx, EndPoint remoteAddress, EndPoint localAddress)
         {
+            File.AppendAllText(this.name, this.Format(ctx, "CONNECT", remoteAddress, localAddress));
+            File.AppendAllText(this.name, Environment.NewLine);
             if (this.Logger.IsEnabled(this.InternalLevel))
             {
                 this.Logger.Log(this.InternalLevel, this.Format(ctx, "CONNECT", remoteAddress, localAddress));
@@ -173,6 +192,8 @@ namespace DotNetty.Handlers.Logging
 
         public override Task DisconnectAsync(IChannelHandlerContext ctx)
         {
+            File.AppendAllText(this.name, this.Format(ctx, "DISCONNECT"));
+            File.AppendAllText(this.name, Environment.NewLine);
             if (this.Logger.IsEnabled(this.InternalLevel))
             {
                 this.Logger.Log(this.InternalLevel, this.Format(ctx, "DISCONNECT"));
@@ -182,6 +203,8 @@ namespace DotNetty.Handlers.Logging
 
         public override Task CloseAsync(IChannelHandlerContext ctx)
         {
+            File.AppendAllText(this.name, this.Format(ctx, "CLOSE"));
+            File.AppendAllText(this.name, Environment.NewLine);
             if (this.Logger.IsEnabled(this.InternalLevel))
             {
                 this.Logger.Log(this.InternalLevel, this.Format(ctx, "CLOSE"));
@@ -191,6 +214,8 @@ namespace DotNetty.Handlers.Logging
 
         public override Task DeregisterAsync(IChannelHandlerContext ctx)
         {
+            File.AppendAllText(this.name, this.Format(ctx, "DEREGISTER"));
+            File.AppendAllText(this.name, Environment.NewLine);
             if (this.Logger.IsEnabled(this.InternalLevel))
             {
                 this.Logger.Log(this.InternalLevel, this.Format(ctx, "DEREGISTER"));
@@ -200,6 +225,8 @@ namespace DotNetty.Handlers.Logging
 
         public override void ChannelRead(IChannelHandlerContext ctx, object message)
         {
+            File.AppendAllText(this.name, this.Format(ctx, "RECEIVED", message));
+            File.AppendAllText(this.name, Environment.NewLine);
             if (this.Logger.IsEnabled(this.InternalLevel))
             {
                 this.Logger.Log(this.InternalLevel, this.Format(ctx, "RECEIVED", message));
@@ -209,6 +236,8 @@ namespace DotNetty.Handlers.Logging
 
         public override Task WriteAsync(IChannelHandlerContext ctx, object msg)
         {
+            File.AppendAllText(this.name, this.Format(ctx, "WRITE", msg));
+            File.AppendAllText(this.name, Environment.NewLine);
             if (this.Logger.IsEnabled(this.InternalLevel))
             {
                 this.Logger.Log(this.InternalLevel, this.Format(ctx, "WRITE", msg));
@@ -218,6 +247,8 @@ namespace DotNetty.Handlers.Logging
 
         public override void Flush(IChannelHandlerContext ctx)
         {
+            File.AppendAllText(this.name, this.Format(ctx, "FLUSH"));
+            File.AppendAllText(this.name, Environment.NewLine);
             if (this.Logger.IsEnabled(this.InternalLevel))
             {
                 this.Logger.Log(this.InternalLevel, this.Format(ctx, "FLUSH"));

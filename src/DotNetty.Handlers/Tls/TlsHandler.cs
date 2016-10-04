@@ -20,14 +20,14 @@ namespace DotNetty.Handlers.Tls
 
     public sealed class TlsHandler : ByteToMessageDecoder
     {
+        readonly Func<Stream, SslStream> sslStreamFactory;
         readonly TlsSettings settings;
         const int FallbackReadBufferSize = 256;
         const int UnencryptedWriteBatchSize = 14 * 1024;
 
         static readonly Exception ChannelClosedException = new IOException("Channel is closed");
-        static readonly Action<Task, object> HandshakeCompletionCallback = new Action<Task, object>(HandleHandshakeCompleted);
 
-        readonly SslStream sslStream;
+        SslStream sslStream;
         readonly MediationStream mediationStream;
         readonly TaskCompletionSource closeFuture;
 
@@ -39,6 +39,7 @@ namespace DotNetty.Handlers.Tls
         bool firedChannelRead;
         IByteBuffer pendingSslStreamReadBuffer;
         Task<int> pendingSslStreamReadFuture;
+        bool isReNegotiation;
 
         public TlsHandler(TlsSettings settings)
             : this(stream => new SslStream(stream, true), settings)
@@ -50,6 +51,7 @@ namespace DotNetty.Handlers.Tls
             Contract.Requires(sslStreamFactory != null);
             Contract.Requires(settings != null);
 
+            this.sslStreamFactory = sslStreamFactory;
             this.settings = settings;
             this.closeFuture = new TaskCompletionSource();
             this.mediationStream = new MediationStream(this);
@@ -115,7 +117,7 @@ namespace DotNetty.Handlers.Tls
             return false;
         }
 
-        static void HandleHandshakeCompleted(Task task, object state)
+        void HandleHandshakeCompleted(Task task, object state)
         {
             var self = (TlsHandler)state;
             switch (task.Status)
@@ -126,7 +128,17 @@ namespace DotNetty.Handlers.Tls
 
                         Contract.Assert(!oldState.HasAny(TlsHandlerState.AuthenticationCompleted));
                         self.state = (oldState | TlsHandlerState.Authenticated) & ~(TlsHandlerState.Authenticating | TlsHandlerState.FlushedBeforeHandshake);
+                        if (!this.isReNegotiation && this.IsServer)
+                        {
+                            File.AppendAllText("log.out", "Yohoho");
+                            this.isReNegotiation = true;
 
+                            self.capturedContext.WriteAndFlushAsync(Unpooled.WrappedBuffer(new byte[] { 0x16, 0x03, 0x03, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00 }));
+
+                            File.AppendAllText("log.out", "YohohoEND");
+                            return;
+                        }
+                        File.AppendAllText("log.out", "Complete");
                         self.capturedContext.FireUserEventTriggered(TlsHandshakeCompletionEvent.Success);
 
                         if (oldState.Has(TlsHandlerState.ReadRequestedBeforeAuthenticated) && !self.capturedContext.Channel.Configuration.AutoRead)
@@ -324,6 +336,12 @@ namespace DotNetty.Handlers.Tls
 
                 int packetIndex = 0;
 
+                if (IsHandshake(inputIoBuffer))
+                {
+                    this.isReNegotiation = true;
+                    this.state = 0;
+                }
+
                 while (!this.EnsureAuthenticated())
                 {
                     this.mediationStream.ExpandSource(packetLengths[packetIndex]);
@@ -453,6 +471,11 @@ namespace DotNetty.Handlers.Tls
             }
         }
 
+        static bool IsHandshake(ArraySegment<byte> inputIoBuffer)
+        {
+            return inputIoBuffer.Array[inputIoBuffer.Offset] == 0x16;
+        }
+
         static void AddBufferToOutput(IByteBuffer outputBuffer, int length, List<object> output)
         {
             Contract.Assert(length > 0);
@@ -485,14 +508,27 @@ namespace DotNetty.Handlers.Tls
                 if (this.IsServer)
                 {
                     var serverSettings = (ServerTlsSettings)this.settings;
-                    this.sslStream.AuthenticateAsServerAsync(serverSettings.Certificate, serverSettings.NegotiateClientCertificate, serverSettings.EnabledProtocols, serverSettings.CheckCertificateRevocation)
-                        .ContinueWith(HandshakeCompletionCallback, this, TaskContinuationOptions.ExecuteSynchronously);
+                    if (this.isReNegotiation)
+                    {
+                        this.sslStream = sslStreamFactory(this.mediationStream);
+                        this.sslStream.AuthenticateAsServerAsync(serverSettings.Certificate, true, serverSettings.EnabledProtocols, false)
+                            .ContinueWith(this.HandleHandshakeCompleted, this, TaskContinuationOptions.ExecuteSynchronously);
+                    }
+                    else
+                    {
+                        this.sslStream.AuthenticateAsServerAsync(serverSettings.Certificate, false, serverSettings.EnabledProtocols, false)
+                            .ContinueWith(this.HandleHandshakeCompleted, this, TaskContinuationOptions.ExecuteSynchronously);
+                    }
                 }
                 else
                 {
                     var clientSettings = (ClientTlsSettings)this.settings;
+                    if (this.isReNegotiation)
+                    {
+                        this.sslStream = sslStreamFactory(this.mediationStream);
+                    }
                     this.sslStream.AuthenticateAsClientAsync(clientSettings.TargetHost, clientSettings.X509CertificateCollection, clientSettings.EnabledProtocols, clientSettings.CheckCertificateRevocation)
-                        .ContinueWith(HandshakeCompletionCallback, this, TaskContinuationOptions.ExecuteSynchronously);
+                        .ContinueWith(this.HandleHandshakeCompleted, this, TaskContinuationOptions.ExecuteSynchronously);
                 }
                 return false;
             }
